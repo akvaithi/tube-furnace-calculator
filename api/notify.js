@@ -1,5 +1,5 @@
 import { Receiver } from "@upstash/qstash";
-import { Resend } from "resend";
+import nodemailer from "nodemailer";
 
 export const config = { api: { bodyParser: false } };
 
@@ -55,17 +55,26 @@ Total programmed duration: ${totalMinutes} min
 
 The programmed cycle has finished. Natural cooling is in progress if the furnace was above 500 °C at the end of the program.`;
 
-  const resend = new Resend(process.env.RESEND_API_KEY);
+  const transporter = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 465,
+    secure: true,
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+
   try {
-    await resend.emails.send({
-      from: process.env.RESEND_FROM_EMAIL,
+    await transporter.sendMail({
+      from: `"Tube Furnace Calculator" <${process.env.SMTP_USER}>`,
       to: email,
       subject,
       text,
     });
     return res.status(200).json({ ok: true });
   } catch (err) {
-    console.error("resend error", err);
+    console.error("smtp error", err);
     return res.status(500).json({ error: "Failed to send email" });
   }
 }

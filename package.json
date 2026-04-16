@@ -4,6 +4,6 @@
   "private": true,
   "dependencies": {
     "@upstash/qstash": "^2.7.17",
-    "resend": "^4.0.1"
+    "nodemailer": "^6.9.16"
   }
 }
