@@ -10,11 +10,14 @@ export default async function handler(req, res) {
   if (!email || typeof email !== "string" || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     return res.status(400).json({ error: "Valid email required" });
   }
-  if (!Number.isFinite(totalMinutes) || totalMinutes <= 0 || totalMinutes > 60 * 24 * 7) {
-    return res.status(400).json({ error: "Invalid total duration" });
+  const isTest = req.body && req.body.test === true;
+  if (!isTest) {
+    if (!Number.isFinite(totalMinutes) || totalMinutes <= 0 || totalMinutes > 60 * 24 * 7) {
+      return res.status(400).json({ error: "Invalid total duration" });
+    }
   }
 
-  const delaySeconds = Math.round(totalMinutes * 60);
+  const delaySeconds = isTest ? 0 : Math.round(totalMinutes * 60);
 
   const proto = req.headers["x-forwarded-proto"] || "https";
   const host = req.headers["x-forwarded-host"] || req.headers.host;
@@ -24,7 +27,7 @@ export default async function handler(req, res) {
     const client = new Client({ token: process.env.QSTASH_TOKEN });
     const result = await client.publishJSON({
       url: notifyUrl,
-      body: { email, maxTemp, holdTime, totalMinutes },
+      body: { email, maxTemp, holdTime, totalMinutes, test: isTest },
       delay: delaySeconds,
     });
     return res.status(200).json({ ok: true, messageId: result.messageId });

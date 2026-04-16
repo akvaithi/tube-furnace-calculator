@@ -37,21 +37,31 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: "Invalid JSON" });
   }
 
-  const { email, maxTemp, holdTime, totalMinutes } = payload;
+  const { email, maxTemp, holdTime, totalMinutes, test } = payload;
+
+  const subject = test
+    ? "Tube furnace calculator — test email"
+    : "Tube furnace run complete";
+
+  const text = test
+    ? `This is a test notification from the tube furnace calculator.
+
+If you received this, notifications are working for ${email}.`
+    : `Your tube furnace run is complete.
+
+Max temp: ${maxTemp} °C
+Hold time at max: ${holdTime} min
+Total programmed duration: ${totalMinutes} min
+
+The programmed cycle has finished. Natural cooling is in progress if the furnace was above 500 °C at the end of the program.`;
 
   const resend = new Resend(process.env.RESEND_API_KEY);
   try {
     await resend.emails.send({
       from: process.env.RESEND_FROM_EMAIL,
       to: email,
-      subject: "Tube furnace run complete",
-      text: `Your tube furnace run is complete.
-
-Max temp: ${maxTemp} °C
-Hold time at max: ${holdTime} min
-Total programmed duration: ${totalMinutes} min
-
-The programmed cycle has finished. Natural cooling is in progress if the furnace was above 500 °C at the end of the program.`,
+      subject,
+      text,
     });
     return res.status(200).json({ ok: true });
   } catch (err) {

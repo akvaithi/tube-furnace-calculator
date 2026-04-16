@@ -140,7 +140,7 @@
 
       <div class="run-section">
         <h2 class="section-heading">Run the program</h2>
-        <p class="section-sub">Start a live timer and get an email when the programmed cycle finishes.</p>
+        <p class="section-sub">Start a live timer and get an email when the programmed cycle finishes. The email is scheduled server-side — closing this tab is fine.</p>
         <div class="row">
           <div class="field">
             <label for="email">Email for completion notification</label>
@@ -149,6 +149,7 @@
         </div>
         <div class="run-controls">
           <button id="startBtn">Start run</button>
+          <button id="testBtn" class="secondary" type="button">Send test email</button>
           <button id="stopBtn" class="secondary" style="display:none;">Cancel run</button>
         </div>
         <div id="runStatus" class="run-status"></div>
@@ -330,6 +331,41 @@ document.getElementById("startBtn").addEventListener("click", async () => {
     runErr.textContent = err.message || "Failed to schedule notification.";
     startBtn.disabled = false;
     startBtn.textContent = "Start run";
+  }
+});
+
+document.getElementById("testBtn").addEventListener("click", async () => {
+  const runErr = document.getElementById("runErr");
+  const status = document.getElementById("runStatus");
+  runErr.textContent = "";
+  status.textContent = "";
+  status.classList.remove("success");
+
+  const email = document.getElementById("email").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    runErr.textContent = "Enter a valid email address to test.";
+    return;
+  }
+
+  const testBtn = document.getElementById("testBtn");
+  testBtn.disabled = true;
+  testBtn.textContent = "Sending...";
+
+  try {
+    const resp = await fetch("/api/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, test: true }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Failed to send test");
+    status.textContent = `Test email queued for ${email}. Delivery usually within a few seconds.`;
+    status.classList.add("success");
+  } catch (err) {
+    runErr.textContent = err.message || "Failed to send test email.";
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = "Send test email";
   }
 });
 
