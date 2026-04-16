@@ -187,8 +187,10 @@ function calc(maxTemp, holdTime) {
   pts.push({ c: maxTemp, t: rampToMax, desc: `Ramp to max ${maxTemp} °C @ ${RAMP} °C/min` });
   pts.push({ c: maxTemp, t: holdTime, desc: `Hold ${holdTime} min at max` });
 
-  const coolTime = Math.round((maxTemp - COOL_FLOOR) / RAMP);
-  pts.push({ c: COOL_FLOOR, t: coolTime, desc: `Cool to ${COOL_FLOOR} °C @ ${RAMP} °C/min` });
+  if (maxTemp > COOL_FLOOR) {
+    const coolTime = Math.round((maxTemp - COOL_FLOOR) / RAMP);
+    pts.push({ c: COOL_FLOOR, t: coolTime, desc: `Cool to ${COOL_FLOOR} °C @ ${RAMP} °C/min` });
+  }
   pts.push({ c: -127, t: 0, desc: "Natural cooling (C = -127 end marker)" });
 
   return pts;
