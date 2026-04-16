@@ -74,6 +74,25 @@
   .notes { font-size: .8rem; color: var(--muted); margin-top: 1rem; line-height: 1.5; }
   .specs { font-size: .82rem; color: var(--muted); }
   .specs code { background: #0b0d12; padding: .1rem .35rem; border-radius: 3px; color: var(--text); }
+  .run-section { margin-top: 1.5rem; padding-top: 1.25rem; border-top: 1px solid var(--border); }
+  .section-heading { font-size: 1.05rem; margin: 0 0 .25rem 0; }
+  .section-sub { color: var(--muted); font-size: .85rem; margin: 0 0 1rem 0; }
+  .run-controls { display: flex; gap: .5rem; margin-top: 1rem; }
+  button.secondary { background: transparent; color: var(--text); border: 1px solid var(--border); }
+  button.secondary:hover { background: #0b0d12; }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+  .run-status { margin-top: .75rem; font-size: .9rem; color: var(--muted); min-height: 1.2em; }
+  .run-status.success { color: #6dd48a; }
+  .timer {
+    margin-top: 1rem;
+    padding: 1rem;
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-line { display: flex; justify-content: space-between; padding: .25rem 0; font-size: .95rem; }
+  .timer-label { color: var(--muted); }
 </style>
 </head>
 <body>
@@ -118,6 +137,28 @@
         <tbody></tbody>
       </table>
       <div class="notes" id="notes"></div>
+
+      <div class="run-section">
+        <h2 class="section-heading">Run the program</h2>
+        <p class="section-sub">Start a live timer and get an email when the programmed cycle finishes.</p>
+        <div class="row">
+          <div class="field">
+            <label for="email">Email for completion notification</label>
+            <input id="email" type="email" placeholder="you@example.com" />
+          </div>
+        </div>
+        <div class="run-controls">
+          <button id="startBtn">Start run</button>
+          <button id="stopBtn" class="secondary" style="display:none;">Cancel run</button>
+        </div>
+        <div id="runStatus" class="run-status"></div>
+        <div id="timer" class="timer" style="display:none;">
+          <div class="timer-line"><span class="timer-label">Elapsed</span><span id="elapsed">00:00:00</span></div>
+          <div class="timer-line"><span class="timer-label">Remaining</span><span id="remaining">00:00:00</span></div>
+          <div class="timer-line"><span class="timer-label">Finishes at</span><span id="eta">—</span></div>
+        </div>
+        <div id="runErr" class="error"></div>
+      </div>
     </div>
   </div>
 
@@ -153,7 +194,9 @@ function calc(maxTemp, holdTime) {
   return pts;
 }
 
-function render(pts) {
+const state = { totalMinutes: 0, maxTemp: 0, holdTime: 0, tickHandle: null, endsAt: null };
+
+function render(pts, maxTemp, holdTime) {
   const tbody = document.querySelector("#resultTable tbody");
   tbody.innerHTML = "";
   let total = 0;
@@ -172,6 +215,10 @@ function render(pts) {
   document.getElementById("notes").textContent =
     `Total programmed time (excluding natural cooling): ${total} min (${hours} h).`;
   document.getElementById("resultPanel").style.display = "block";
+  state.totalMinutes = total;
+  state.maxTemp = maxTemp;
+  state.holdTime = holdTime;
+  resetRunUI();
 }
 
 document.getElementById("calcBtn").addEventListener("click", () => {
@@ -193,7 +240,101 @@ document.getElementById("calcBtn").addEventListener("click", () => {
     return;
   }
 
-  render(calc(maxTemp, holdTime));
+  render(calc(maxTemp, holdTime), maxTemp, holdTime);
+});
+
+function fmtDuration(ms) {
+  if (ms < 0) ms = 0;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return [h, m, s].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+function resetRunUI() {
+  clearInterval(state.tickHandle);
+  state.tickHandle = null;
+  state.endsAt = null;
+  document.getElementById("timer").style.display = "none";
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("startBtn").textContent = "Start run";
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("runStatus").textContent = "";
+  document.getElementById("runStatus").classList.remove("success");
+  document.getElementById("runErr").textContent = "";
+}
+
+function tick() {
+  const now = Date.now();
+  const remainingMs = state.endsAt - now;
+  const elapsedMs = state.totalMinutes * 60 * 1000 - remainingMs;
+  document.getElementById("elapsed").textContent = fmtDuration(elapsedMs);
+  document.getElementById("remaining").textContent = fmtDuration(remainingMs);
+  if (remainingMs <= 0) {
+    clearInterval(state.tickHandle);
+    state.tickHandle = null;
+    const status = document.getElementById("runStatus");
+    status.textContent = "Programmed cycle complete. Notification email dispatched.";
+    status.classList.add("success");
+    document.getElementById("stopBtn").style.display = "none";
+  }
+}
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const runErr = document.getElementById("runErr");
+  const status = document.getElementById("runStatus");
+  runErr.textContent = "";
+  status.textContent = "";
+  status.classList.remove("success");
+
+  const email = document.getElementById("email").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    runErr.textContent = "Enter a valid email address.";
+    return;
+  }
+  if (!state.totalMinutes) {
+    runErr.textContent = "Calculate a program first.";
+    return;
+  }
+
+  const startBtn = document.getElementById("startBtn");
+  startBtn.disabled = true;
+  startBtn.textContent = "Scheduling...";
+
+  try {
+    const resp = await fetch("/api/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        totalMinutes: state.totalMinutes,
+        maxTemp: state.maxTemp,
+        holdTime: state.holdTime,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Failed to schedule");
+
+    state.endsAt = Date.now() + state.totalMinutes * 60 * 1000;
+    document.getElementById("eta").textContent = new Date(state.endsAt).toLocaleString();
+    document.getElementById("timer").style.display = "block";
+    document.getElementById("stopBtn").style.display = "inline-block";
+    startBtn.textContent = "Running...";
+    status.textContent = `Run started. Notification will be emailed to ${email}.`;
+    tick();
+    state.tickHandle = setInterval(tick, 1000);
+  } catch (err) {
+    runErr.textContent = err.message || "Failed to schedule notification.";
+    startBtn.disabled = false;
+    startBtn.textContent = "Start run";
+  }
+});
+
+document.getElementById("stopBtn").addEventListener("click", () => {
+  if (!confirm("Cancel the local timer? Note: the scheduled email cannot be cancelled and will still be sent.")) return;
+  resetRunUI();
+  document.getElementById("runStatus").textContent = "Local timer cancelled. (Scheduled email will still send.)";
 });
 </script>
 </body>
