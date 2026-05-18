@@ -180,11 +180,19 @@ function calc(maxTemp, holdTime) {
   const segments = [];
 
   const firstTarget = preheats.length > 0 ? preheats[0] : maxTemp;
+  // First ramp uses a fixed 40 min when going 0→300 °C: the furnace actually
+  // starts at room temp (~25 °C), not 0 °C, so the effective rate is faster
+  // than the nominal 5 °C/min. 40 min matches the MTI reference schedule.
+  const firstRampTime = (firstTarget === 300)
+    ? 40
+    : Math.round((firstTarget - START_TEMP) / RAMP);
   segments.push({
     c: START_TEMP,
     cDesc: "Initial temperature",
-    t: Math.round((firstTarget - START_TEMP) / RAMP),
-    tDesc: `Heat-up time from ${START_TEMP} to ${firstTarget} °C @ ${RAMP} °C/min`,
+    t: firstRampTime,
+    tDesc: (firstTarget === 300)
+      ? `Heat-up time from ${START_TEMP} to ${firstTarget} °C (40 min, accounts for room-temp start)`
+      : `Heat-up time from ${START_TEMP} to ${firstTarget} °C @ ${RAMP} °C/min`,
   });
 
   for (let i = 0; i < preheats.length; i++) {
