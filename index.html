@@ -104,8 +104,9 @@
       <div class="specs">
         Max temp <code>1600 °C</code> &middot;
         Ramp/drop rate <code>5 °C/min</code> &middot;
+        Initial temp <code>C01 = 0</code> &middot;
         Preheat holds <code>300, 800, 1200 °C</code> for <code>20 min</code> each &middot;
-        Programmed cool to <code>500 °C</code>, then natural cooling.
+        Programmed cool to <code>500 °C</code>, then natural cooling (end marker <code>T = -121</code>).
       </div>
     </div>
 
@@ -128,9 +129,8 @@
       <table id="resultTable">
         <thead>
           <tr>
-            <th>Step</th>
-            <th>C (°C)</th>
-            <th>T (min)</th>
+            <th>Prompt</th>
+            <th>Input Data</th>
             <th>Description</th>
           </tr>
         </thead>
@@ -169,48 +169,92 @@ const RAMP = 5;
 const PREHEATS = [300, 800, 1200];
 const HOLD_PREHEAT = 20;
 const COOL_FLOOR = 500;
-const START_TEMP = 25;
+const START_TEMP = 0;
+const END_MARKER = -121;
 
 function calc(maxTemp, holdTime) {
-  const steps = PREHEATS.filter(p => p < maxTemp);
-  const pts = [];
-  pts.push({ c: START_TEMP, t: 0, desc: "Start (room temperature)" });
+  const preheats = PREHEATS.filter(p => p < maxTemp);
 
-  let prevTemp = START_TEMP;
-  for (const p of steps) {
-    const rampTime = Math.round((p - prevTemp) / RAMP);
-    pts.push({ c: p, t: rampTime, desc: `Ramp to preheat ${p} °C @ ${RAMP} °C/min` });
-    pts.push({ c: p, t: HOLD_PREHEAT, desc: `Hold ${HOLD_PREHEAT} min at ${p} °C` });
-    prevTemp = p;
+  // Each segment: c = setpoint at segment start, t = duration, descriptions for the two rows.
+  // Flattened, Cn / Tn appear as alternating prompts matching the MTI controller's input order.
+  const segments = [];
+
+  const firstTarget = preheats.length > 0 ? preheats[0] : maxTemp;
+  segments.push({
+    c: START_TEMP,
+    cDesc: "Initial temperature",
+    t: Math.round((firstTarget - START_TEMP) / RAMP),
+    tDesc: `Heat-up time from ${START_TEMP} to ${firstTarget} °C @ ${RAMP} °C/min`,
+  });
+
+  for (let i = 0; i < preheats.length; i++) {
+    const p = preheats[i];
+    segments.push({
+      c: p,
+      cDesc: `Target temperature of the ${p} °C preheat hold`,
+      t: HOLD_PREHEAT,
+      tDesc: `Hold ${HOLD_PREHEAT} min at ${p} °C`,
+    });
+    const nextTarget = (i + 1 < preheats.length) ? preheats[i + 1] : maxTemp;
+    segments.push({
+      c: p,
+      cDesc: `Beginning temperature of the next heat-up stage`,
+      t: Math.round((nextTarget - p) / RAMP),
+      tDesc: `Heat-up time from ${p} to ${nextTarget} °C @ ${RAMP} °C/min`,
+    });
   }
 
-  const rampToMax = Math.round((maxTemp - prevTemp) / RAMP);
-  pts.push({ c: maxTemp, t: rampToMax, desc: `Ramp to max ${maxTemp} °C @ ${RAMP} °C/min` });
-  pts.push({ c: maxTemp, t: holdTime, desc: `Hold ${holdTime} min at max` });
+  segments.push({
+    c: maxTemp,
+    cDesc: `Target temperature ${maxTemp} °C (process hold)`,
+    t: holdTime,
+    tDesc: `Hold ${holdTime} min at ${maxTemp} °C`,
+  });
 
   if (maxTemp > COOL_FLOOR) {
-    const coolTime = Math.round((maxTemp - COOL_FLOOR) / RAMP);
-    pts.push({ c: COOL_FLOOR, t: coolTime, desc: `Cool to ${COOL_FLOOR} °C @ ${RAMP} °C/min` });
+    segments.push({
+      c: maxTemp,
+      cDesc: `Beginning temperature of the programmed cooling stage`,
+      t: Math.round((maxTemp - COOL_FLOOR) / RAMP),
+      tDesc: `Cooling time from ${maxTemp} to ${COOL_FLOOR} °C @ ${RAMP} °C/min`,
+    });
+    segments.push({
+      c: COOL_FLOOR,
+      cDesc: `Beginning temperature of the natural-cooling stage`,
+      t: END_MARKER,
+      tDesc: `Program end (T = ${END_MARKER}). Output power off; furnace cools naturally.`,
+    });
+  } else {
+    segments.push({
+      c: maxTemp,
+      cDesc: `Beginning temperature of the natural-cooling stage`,
+      t: END_MARKER,
+      tDesc: `Program end (T = ${END_MARKER}). Output power off; furnace cools naturally.`,
+    });
   }
-  pts.push({ c: -127, t: 0, desc: "Natural cooling (C = -127 end marker)" });
 
-  return pts;
+  const rows = [];
+  segments.forEach((s, i) => {
+    const n = String(i + 1).padStart(2, "0");
+    rows.push({ prompt: `C${n}`, value: s.c, desc: s.cDesc });
+    rows.push({ prompt: `T${n}`, value: s.t, desc: s.tDesc });
+  });
+  return rows;
 }
 
 const state = { totalMinutes: 0, maxTemp: 0, holdTime: 0, tickHandle: null, endsAt: null };
 
-function render(pts, maxTemp, holdTime) {
+function render(rows, maxTemp, holdTime) {
   const tbody = document.querySelector("#resultTable tbody");
   tbody.innerHTML = "";
   let total = 0;
-  pts.forEach((p, i) => {
-    total += p.t;
+  rows.forEach(r => {
+    if (r.prompt.startsWith("T") && r.value !== END_MARKER) total += r.value;
     const tr = document.createElement("tr");
     tr.innerHTML = `
-      <td class="label-cell">C${i} / T${i}</td>
-      <td>${p.c}</td>
-      <td>${p.t}</td>
-      <td class="label-cell">${p.desc}</td>
+      <td class="label-cell">${r.prompt}</td>
+      <td>${r.value}</td>
+      <td class="label-cell">${r.desc}</td>
     `;
     tbody.appendChild(tr);
   });
