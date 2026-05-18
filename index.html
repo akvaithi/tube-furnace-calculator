@@ -49,6 +49,18 @@
     font-size: 1rem;
   }
   input:focus { outline: none; border-color: var(--accent); }
+  select {
+    padding: .6rem .75rem;
+    background: #0b0d12;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    color: var(--text);
+    font-size: 1rem;
+    cursor: pointer;
+  }
+  select:focus { outline: none; border-color: var(--accent); }
+  .input-with-unit { display: flex; gap: .5rem; }
+  .input-with-unit input { flex: 1; }
   button {
     margin-top: 1rem;
     padding: .65rem 1.25rem;
@@ -117,8 +129,14 @@
           <input id="maxTemp" type="number" min="1" max="1600" step="1" placeholder="e.g. 1400" />
         </div>
         <div class="field">
-          <label for="holdTime">Hold time at max (min)</label>
-          <input id="holdTime" type="number" min="0" step="1" placeholder="e.g. 60" />
+          <label for="holdTime">Hold time at max</label>
+          <div class="input-with-unit">
+            <input id="holdTime" type="number" min="0" step="any" placeholder="e.g. 60" />
+            <select id="holdTimeUnit" aria-label="Hold time unit">
+              <option value="min">min</option>
+              <option value="h">h</option>
+            </select>
+          </div>
         </div>
       </div>
       <button id="calcBtn">Calculate</button>
@@ -280,7 +298,8 @@ document.getElementById("calcBtn").addEventListener("click", () => {
   const err = document.getElementById("err");
   err.textContent = "";
   const maxTemp = Number(document.getElementById("maxTemp").value);
-  const holdTime = Number(document.getElementById("holdTime").value);
+  const holdTimeRaw = Number(document.getElementById("holdTime").value);
+  const holdUnit = document.getElementById("holdTimeUnit").value;
 
   if (!Number.isFinite(maxTemp) || maxTemp <= START_TEMP) {
     err.textContent = `Enter a target temperature greater than ${START_TEMP} °C.`;
@@ -290,11 +309,12 @@ document.getElementById("calcBtn").addEventListener("click", () => {
     err.textContent = `Target temperature must not exceed ${MAX_TEMP} °C.`;
     return;
   }
-  if (!Number.isFinite(holdTime) || holdTime < 0) {
+  if (!Number.isFinite(holdTimeRaw) || holdTimeRaw < 0) {
     err.textContent = "Enter a non-negative hold time.";
     return;
   }
 
+  const holdTime = holdUnit === "h" ? Math.round(holdTimeRaw * 60) : Math.round(holdTimeRaw);
   render(calc(maxTemp, holdTime), maxTemp, holdTime);
 });
 
