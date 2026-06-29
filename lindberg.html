@@ -1,0 +1,903 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta name="color-scheme" content="light dark" />
+<title>Lindberg/Blue M — 3216C Program Calculator</title>
+<style>
+  /* ---------------------------------------------------------------------------
+     macOS 26 (Tahoe) "Liquid Glass" styling, aligned with Apple HIG:
+     system typography, semantic colors, vibrant translucent materials,
+     continuous-feeling corner radii, and full light / dark support.
+     (Shared verbatim with index.html so both calculators look identical.)
+  --------------------------------------------------------------------------- */
+  :root {
+    /* System accent + semantic colors (light appearance) */
+    --accent: #007aff;
+    --accent-hover: #0a84ff;
+    --success: #34c759;
+    --danger: #ff3b30;
+
+    /* Label colors (HIG hierarchy) */
+    --label: rgba(0, 0, 0, 0.85);
+    --label-secondary: rgba(60, 60, 67, 0.6);
+    --label-tertiary: rgba(60, 60, 67, 0.4);
+
+    /* Materials / surfaces */
+    --window-bg: #e9eaf0;
+    --window-bg-2: #dfe3ee;
+    --material: rgba(255, 255, 255, 0.62);
+    --material-thin: rgba(255, 255, 255, 0.5);
+    --control-bg: rgba(255, 255, 255, 0.7);
+    --control-bg-inset: rgba(255, 255, 255, 0.85);
+    --separator: rgba(0, 0, 0, 0.1);
+    --hairline: rgba(255, 255, 255, 0.6);
+
+    --shadow-card: 0 12px 40px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.08);
+    --ring: 0 0 0 4px rgba(0, 122, 255, 0.3);
+
+    --radius-card: 20px;
+    --radius-control: 11px;
+    --radius-inner: 8px;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --accent: #0a84ff;
+      --accent-hover: #409cff;
+      --success: #30d158;
+      --danger: #ff453a;
+
+      --label: rgba(255, 255, 255, 0.92);
+      --label-secondary: rgba(235, 235, 245, 0.6);
+      --label-tertiary: rgba(235, 235, 245, 0.35);
+
+      --window-bg: #1c1c20;
+      --window-bg-2: #131316;
+      --material: rgba(40, 42, 50, 0.62);
+      --material-thin: rgba(50, 52, 62, 0.5);
+      --control-bg: rgba(255, 255, 255, 0.07);
+      --control-bg-inset: rgba(0, 0, 0, 0.28);
+      --separator: rgba(255, 255, 255, 0.1);
+      --hairline: rgba(255, 255, 255, 0.08);
+
+      --shadow-card: 0 16px 50px rgba(0, 0, 0, 0.5), 0 1px 1px rgba(0, 0, 0, 0.3);
+      --shadow-control: 0 1px 2px rgba(0, 0, 0, 0.3);
+      --ring: 0 0 0 4px rgba(10, 132, 255, 0.4);
+    }
+  }
+
+  * { box-sizing: border-box; }
+
+  html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro", "Segoe UI", sans-serif;
+    font-size: 15px;
+    line-height: 1.45;
+    color: var(--label);
+    min-height: 100vh;
+    padding: 3rem 1.25rem 4rem;
+    background:
+      radial-gradient(1200px 800px at 15% -10%, rgba(10, 132, 255, 0.12), transparent 60%),
+      radial-gradient(1000px 700px at 110% 10%, rgba(175, 82, 222, 0.1), transparent 55%),
+      linear-gradient(180deg, var(--window-bg), var(--window-bg-2));
+    background-attachment: fixed;
+  }
+
+  .container {
+    max-width: 760px;
+    margin: 0 auto;
+  }
+
+  header { margin-bottom: 1.75rem; padding: 0 0.25rem; }
+
+  h1 {
+    margin: 0 0 0.25rem 0;
+    font-size: 1.85rem;
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro", sans-serif;
+  }
+  p.subtitle {
+    color: var(--label-secondary);
+    margin: 0;
+    font-size: 0.95rem;
+  }
+
+  /* Liquid Glass card */
+  .panel {
+    background: var(--material);
+    -webkit-backdrop-filter: blur(30px) saturate(180%);
+    backdrop-filter: blur(30px) saturate(180%);
+    border: 0.5px solid var(--hairline);
+    border-radius: var(--radius-card);
+    padding: 1.5rem;
+    margin-bottom: 1.25rem;
+    box-shadow: var(--shadow-card);
+  }
+
+  .row { display: flex; gap: 1rem; flex-wrap: wrap; }
+  .field { flex: 1; min-width: 200px; }
+
+  label {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--label-secondary);
+    margin-bottom: 0.45rem;
+    letter-spacing: -0.01em;
+  }
+
+  input, select {
+    width: 100%;
+    padding: 0.62rem 0.8rem;
+    background: var(--control-bg-inset);
+    border: 0.5px solid var(--separator);
+    border-radius: var(--radius-control);
+    color: var(--label);
+    font-size: 0.98rem;
+    font-family: inherit;
+    box-shadow: var(--shadow-control);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  }
+  input::placeholder { color: var(--label-tertiary); }
+
+  input:focus-visible, select:focus-visible {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: var(--ring);
+  }
+  input:focus, select:focus { outline: none; }
+
+  select {
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 2rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%238e8e93' d='M6 8.5L2.5 4.5h7z'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 0.7rem center;
+  }
+
+  .input-with-unit { display: flex; gap: 0.5rem; }
+  .input-with-unit input { flex: 1; }
+  .input-with-unit select { width: auto; min-width: 5rem; }
+
+  /* Buttons */
+  button {
+    padding: 0.6rem 1.3rem;
+    border: none;
+    border-radius: var(--radius-control);
+    font-weight: 590;
+    font-size: 0.95rem;
+    font-family: inherit;
+    letter-spacing: -0.01em;
+    cursor: pointer;
+    transition: filter 0.15s ease, transform 0.05s ease, background 0.15s ease;
+  }
+  button:active { transform: scale(0.975); }
+
+  button#calcBtn, button#startBtn {
+    margin-top: 1.25rem;
+    color: #fff;
+    background: linear-gradient(180deg, var(--accent-hover), var(--accent));
+    box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 0.5px 0 rgba(255, 255, 255, 0.3);
+  }
+  button#calcBtn:hover, button#startBtn:hover { filter: brightness(1.06); }
+
+  button.secondary {
+    background: var(--control-bg);
+    color: var(--accent);
+    border: 0.5px solid var(--separator);
+    -webkit-backdrop-filter: blur(10px);
+    backdrop-filter: blur(10px);
+    box-shadow: var(--shadow-control);
+  }
+  button.secondary:hover { background: var(--control-bg-inset); }
+
+  button:focus-visible { outline: none; box-shadow: var(--ring); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; transform: none; }
+
+  .error {
+    color: var(--danger);
+    font-size: 0.85rem;
+    margin-top: 0.6rem;
+    min-height: 1.1em;
+    font-weight: 500;
+  }
+
+  /* Spec chips */
+  .specs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--label-secondary);
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.35rem 0.7rem;
+    background: var(--control-bg);
+    border: 0.5px solid var(--separator);
+    border-radius: 999px;
+  }
+  .chip code {
+    color: var(--label);
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-size: 0.82em;
+    font-weight: 600;
+  }
+
+  /* Step (segment) cards */
+  .step {
+    border: 0.5px solid var(--separator);
+    border-radius: var(--radius-control);
+    padding: 1rem;
+    margin-top: 1rem;
+    background: var(--control-bg);
+  }
+  .step-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .step-title { font-weight: 600; font-size: 0.92rem; }
+  .step-remove {
+    padding: 0.3rem 0.7rem;
+    font-size: 0.82rem;
+    color: var(--danger);
+    background: var(--control-bg-inset);
+    border: 0.5px solid var(--separator);
+  }
+  .hint { font-size: 0.8rem; color: var(--label-tertiary); margin-top: 0.35rem; }
+
+  /* Result table */
+  table { width: 100%; border-collapse: collapse; margin-top: 0.25rem; }
+  th, td {
+    padding: 0.65rem 0.8rem;
+    text-align: left;
+    border-bottom: 0.5px solid var(--separator);
+    font-variant-numeric: tabular-nums;
+  }
+  thead th { border-bottom-width: 1px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr { transition: background 0.1s ease; }
+  tbody tr:hover { background: var(--control-bg); }
+  th {
+    color: var(--label-secondary);
+    font-weight: 600;
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+  }
+  td.label-cell { color: var(--label-secondary); font-size: 0.88rem; }
+  td:first-child {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-weight: 600;
+    color: var(--accent);
+  }
+  tr.setup-row td:first-child { color: var(--label-secondary); }
+
+  .notes {
+    font-size: 0.85rem;
+    color: var(--label-secondary);
+    margin-top: 1.1rem;
+    line-height: 1.5;
+  }
+
+  .run-section {
+    margin-top: 1.75rem;
+    padding-top: 1.5rem;
+    border-top: 0.5px solid var(--separator);
+  }
+  .section-heading {
+    font-size: 1.2rem;
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    margin: 0 0 0.3rem 0;
+  }
+  .section-sub { color: var(--label-secondary); font-size: 0.88rem; margin: 0 0 1.1rem 0; }
+  .run-controls { display: flex; gap: 0.6rem; margin-top: 1.1rem; flex-wrap: wrap; }
+
+  .run-status { margin-top: 0.85rem; font-size: 0.9rem; color: var(--label-secondary); min-height: 1.2em; }
+  .run-status.success { color: var(--success); font-weight: 500; }
+
+  .timer {
+    margin-top: 1.1rem;
+    padding: 1.1rem 1.25rem;
+    background: var(--control-bg-inset);
+    border: 0.5px solid var(--separator);
+    border-radius: var(--radius-control);
+    font-variant-numeric: tabular-nums;
+  }
+  .timer-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    padding: 0.35rem 0;
+    font-size: 1rem;
+  }
+  .timer-line + .timer-line { border-top: 0.5px solid var(--separator); }
+  .timer-label { color: var(--label-secondary); font-size: 0.88rem; }
+  .timer-line span:last-child {
+    font-family: "SF Mono", ui-monospace, Menlo, monospace;
+    font-weight: 600;
+    font-size: 1.05rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { transition: none !important; }
+  }
+</style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>Lindberg/Blue M — 3216C Program Calculator</h1>
+      <p class="subtitle">Generates a Eurotherm 3216C ramp/dwell program (TSP / RMP / DWEL) from a target temperature and hold time.</p>
+    </header>
+
+    <div class="panel">
+      <div class="specs">
+        <span class="chip">Max temp <code>1100 °C</code></span>
+        <span class="chip">Ramp rate <code>≤ 10 °C/min</code></span>
+        <span class="chip">Programmer <code>4 ramp/dwell pairs</code></span>
+        <span class="chip">Start <code>TSP.1 = 25 °C</code></span>
+        <span class="chip">Level 2 code <code>25</code></span>
+        <span class="chip">End <code>END.T</code></span>
+      </div>
+    </div>
+
+    <div class="panel">
+      <div class="row">
+        <div class="field">
+          <label for="targetTemp">Target temperature (°C)</label>
+          <input id="targetTemp" type="number" min="1" max="1100" step="1" placeholder="e.g. 1000" />
+        </div>
+        <div class="field">
+          <label for="rampRate">Ramp rate to target</label>
+          <div class="input-with-unit">
+            <input id="rampRate" type="number" min="0.1" step="any" placeholder="e.g. 10" value="10" />
+            <select id="rampUnit" aria-label="Ramp rate unit">
+              <option value="min">°C/min</option>
+              <option value="h">°C/hour</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:1rem;">
+        <div class="field">
+          <label for="holdTime">Hold time at target</label>
+          <div class="input-with-unit">
+            <input id="holdTime" type="number" min="0" step="any" placeholder="e.g. 60" />
+            <select id="holdTimeUnit" aria-label="Hold time unit">
+              <option value="min">min</option>
+              <option value="h">h</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="purgeTime">Room-temp purge dwell (optional)</label>
+          <div class="input-with-unit">
+            <input id="purgeTime" type="number" min="0" step="any" placeholder="0" />
+            <select id="purgeTimeUnit" aria-label="Purge dwell unit">
+              <option value="min">min</option>
+              <option value="h">h</option>
+            </select>
+          </div>
+        </div>
+      </div>
+      <div class="row" style="margin-top:1rem;">
+        <div class="field">
+          <label for="endType">End type (END.T)</label>
+          <select id="endType">
+            <option value="dwEll">dwEll — hold last setpoint</option>
+            <option value="OFF">OFF — power off, natural cool</option>
+            <option value="rES">rES — reset to SP1</option>
+            <option value="SP2">SP2 — control at setpoint 2</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="thres">Holdback band THRES (°C)</label>
+          <input id="thres" type="number" min="0" step="1" value="5" />
+        </div>
+      </div>
+
+      <div id="extraSteps"></div>
+      <div class="hint" id="addHint" style="margin-top:0.75rem;">
+        The 3216C has 4 ramp/dwell pairs. Pair 1 = room-temp purge, pair 2 = target + hold.
+        Add up to 2 more steps (e.g. a second soak or a controlled cool-down).
+      </div>
+      <button id="addStepBtn" class="secondary" type="button" style="margin-top:0.75rem;">Add step</button>
+
+      <button id="calcBtn">Calculate program</button>
+      <div id="err" class="error"></div>
+    </div>
+
+    <div id="resultPanel" class="panel" style="display:none;">
+      <table id="resultTable">
+        <thead>
+          <tr>
+            <th>Prompt</th>
+            <th>Set To</th>
+            <th>Description</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+      <div class="notes" id="notes"></div>
+
+      <div class="run-section">
+        <h2 class="section-heading">Run the program</h2>
+        <p class="section-sub">Start a live timer and get an email when the programmed cycle finishes. The email is scheduled server-side — closing this tab is fine.</p>
+        <div class="row">
+          <div class="field">
+            <label for="email">Email for completion notification</label>
+            <input id="email" type="email" placeholder="you@example.com" />
+          </div>
+        </div>
+        <div class="run-controls">
+          <button id="startBtn">Start run</button>
+          <button id="testBtn" class="secondary" type="button">Send test email</button>
+          <button id="stopBtn" class="secondary" style="display:none;">Cancel run</button>
+        </div>
+        <div id="runStatus" class="run-status"></div>
+        <div id="timer" class="timer" style="display:none;">
+          <div class="timer-line"><span class="timer-label">Elapsed</span><span id="elapsed">00:00:00</span></div>
+          <div class="timer-line"><span class="timer-label">Remaining</span><span id="remaining">00:00:00</span></div>
+          <div class="timer-line"><span class="timer-label">Finishes at</span><span id="eta">—</span></div>
+        </div>
+        <div id="runErr" class="error"></div>
+      </div>
+    </div>
+  </div>
+
+<script>
+const MAX_TEMP = 1100;          // °C (controller hard limit ≈ 1160)
+const MAX_RATE_CMIN = 10;       // °C/min ceiling for any RMP
+const START_TEMP = 25;          // °C, TSP.1 room-temp start
+const PAIRS = 4;                // ramp/dwell pairs (8 segments)
+const RMP_FIRST = 10.0;         // RMP.1 fixed at 10.0 per the operating card
+
+// Extra (optional) ramp/dwell steps beyond the room-temp purge (pair 1) and the
+// main target+hold (pair 2). Each holds { temp, rate, unit, hold, holdUnit }.
+const extra = [];
+
+function rateToCPerMin(rate, unit) {
+  return unit === "h" ? rate / 60 : rate;
+}
+// The 3216C has a single TM.RES; one ramp unit applies to the whole program.
+function globalUnit() {
+  return document.getElementById("rampUnit").value;
+}
+function globalUnitLabel() {
+  return globalUnit() === "h" ? "°C/hour" : "°C/min";
+}
+// Display ramp rate in the unit the user chose for that segment.
+function fmtRate(rate) {
+  return Number.isInteger(rate) ? String(rate) : String(rate);
+}
+function toMinutes(val, unit) {
+  return unit === "h" ? val * 60 : val;
+}
+// Controller dwell format: h:mm.
+function fmtHMM(totalMin) {
+  const m = Math.max(0, Math.round(totalMin));
+  const h = Math.floor(m / 60);
+  const mm = m % 60;
+  return `${h}:${String(mm).padStart(2, "0")}`;
+}
+
+function renderExtraSteps() {
+  const wrap = document.getElementById("extraSteps");
+  wrap.innerHTML = "";
+  extra.forEach((s, i) => {
+    // Pair number is i+3 (pairs 1 and 2 are purge + main).
+    const pairNo = i + 3;
+    const div = document.createElement("div");
+    div.className = "step";
+    div.innerHTML = `
+      <div class="step-head">
+        <span class="step-title">Step ${pairNo} — TSP.${pairNo} / RMP.${pairNo} / DWEL.${pairNo}</span>
+        <button class="step-remove" type="button" data-i="${i}">Remove</button>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Target temperature (°C)</label>
+          <input type="number" min="1" max="${MAX_TEMP}" step="1" data-i="${i}" data-k="temp" value="${s.temp ?? ""}" placeholder="e.g. 600" />
+        </div>
+        <div class="field">
+          <label>Ramp rate (${globalUnitLabel()})</label>
+          <input type="number" min="0.1" step="any" data-i="${i}" data-k="rate" value="${s.rate ?? ""}" placeholder="e.g. 5" />
+        </div>
+      </div>
+      <div class="row" style="margin-top:0.75rem;">
+        <div class="field">
+          <label>Dwell at this step</label>
+          <div class="input-with-unit">
+            <input type="number" min="0" step="any" data-i="${i}" data-k="hold" value="${s.hold ?? ""}" placeholder="0" />
+            <select data-i="${i}" data-k="holdUnit">
+              <option value="min" ${s.holdUnit !== "h" ? "selected" : ""}>min</option>
+              <option value="h" ${s.holdUnit === "h" ? "selected" : ""}>h</option>
+            </select>
+          </div>
+        </div>
+        <div class="field"></div>
+      </div>
+    `;
+    wrap.appendChild(div);
+  });
+
+  wrap.querySelectorAll("input, select").forEach(el => {
+    el.addEventListener("input", e => {
+      const i = Number(e.target.dataset.i);
+      const k = e.target.dataset.k;
+      const v = e.target.value;
+      extra[i][k] = (k === "holdUnit") ? v : (v === "" ? "" : Number(v));
+    });
+  });
+  wrap.querySelectorAll(".step-remove").forEach(btn => {
+    btn.addEventListener("click", e => {
+      extra.splice(Number(e.target.dataset.i), 1);
+      renderExtraSteps();
+      updateAddBtn();
+    });
+  });
+}
+
+function updateAddBtn() {
+  // Pairs used: purge (1) + main (2) + extras. Cap at PAIRS total.
+  const used = 2 + extra.length;
+  document.getElementById("addStepBtn").style.display = used >= PAIRS ? "none" : "inline-block";
+}
+
+document.getElementById("addStepBtn").addEventListener("click", () => {
+  if (2 + extra.length >= PAIRS) return;
+  extra.push({ temp: "", rate: "", hold: "", holdUnit: "min" });
+  renderExtraSteps();
+  updateAddBtn();
+});
+
+// Re-render extra steps when the program-wide ramp unit changes so their labels track it.
+document.getElementById("rampUnit").addEventListener("change", () => {
+  if (extra.length) renderExtraSteps();
+});
+
+// Build the program: an ordered list of segments, each becoming a TSP/RMP/DWEL pair.
+// Returns { rows, totalMinutes } where rows mirror the controller's prompt order.
+function buildProgram(opts) {
+  const { target, rate, unit, holdMin, purgeMin, endType, thres } = opts;
+  const uLabel = unit === "h" ? "°C/hour" : "°C/min";
+
+  // segment: { tsp, rmpCmin (°C/min for timing, or "OFF"), rmpLabel (value in program unit), dwellMin, descs }
+  const segs = [];
+
+  // Pair 1 — room-temp purge / start point. No temperature change, so the rate is not
+  // critical; the operating card keeps RMP.1 at its max (10.0), which we mirror verbatim.
+  segs.push({
+    tsp: START_TEMP,
+    rmpCmin: RMP_FIRST,
+    rmpLabel: RMP_FIRST.toFixed(1),
+    dwellMin: purgeMin,
+    fromTemp: START_TEMP,
+    descTsp: `Room-temperature start point (${START_TEMP} °C)`,
+    descRmp: `Per the operating card, keep RMP.1 at ${RMP_FIRST.toFixed(1)} (no temp change here, so value is not critical)`,
+    descDwell: purgeMin > 0
+      ? `Purge / soak ${fmtHMM(purgeMin)} (h:mm) at room temperature`
+      : `No room-temperature dwell`,
+  });
+
+  // Pair 2 — ramp to target + main hold.
+  segs.push({
+    tsp: target,
+    rmpCmin: rateToCPerMin(rate, unit),
+    rmpLabel: fmtRate(rate),
+    dwellMin: holdMin,
+    fromTemp: START_TEMP,
+    descTsp: `Target temperature ${target} °C (process soak)`,
+    descRmp: `Ramp ${START_TEMP} → ${target} °C at ${fmtRate(rate)} ${uLabel}`,
+    descDwell: `Hold ${fmtHMM(holdMin)} (h:mm) at ${target} °C`,
+  });
+
+  // Extra pairs (3, 4) — same program-wide ramp unit.
+  let prevTemp = target;
+  extra.forEach(s => {
+    const dMin = toMinutes(s.hold, s.holdUnit);
+    const direction = s.temp >= prevTemp ? "Ramp" : "Cool";
+    segs.push({
+      tsp: s.temp,
+      rmpCmin: rateToCPerMin(s.rate, unit),
+      rmpLabel: fmtRate(s.rate),
+      dwellMin: dMin,
+      fromTemp: prevTemp,
+      descTsp: `Step target ${s.temp} °C`,
+      descRmp: `${direction} ${prevTemp} → ${s.temp} °C at ${fmtRate(s.rate)} ${uLabel}`,
+      descDwell: dMin > 0 ? `Hold ${fmtHMM(dMin)} (h:mm) at ${s.temp} °C` : `No dwell at this step`,
+    });
+    prevTemp = s.temp;
+  });
+
+  // Fill remaining pairs as unused: RMP = OFF, TSP = previous target, DWEL = 0 (manual convention).
+  while (segs.length < PAIRS) {
+    const lastTemp = segs[segs.length - 1].tsp;
+    segs.push({
+      tsp: lastTemp,
+      rmpCmin: "OFF",
+      rmpLabel: "OFF",
+      dwellMin: 0,
+      fromTemp: lastTemp,
+      descTsp: `Unused segment — left at the previous target (${lastTemp} °C)`,
+      descRmp: `Ramp OFF (segment unused)`,
+      descDwell: `No dwell (segment unused)`,
+    });
+  }
+
+  // Total programmed time = Σ ramp time + dwell over all segments.
+  let totalMinutes = 0;
+  segs.forEach(s => {
+    if (s.rmpCmin !== "OFF" && s.rmpCmin > 0) {
+      const dT = Math.abs(s.tsp - s.fromTemp);
+      totalMinutes += dT / s.rmpCmin;
+    }
+    totalMinutes += s.dwellMin;
+  });
+
+  // Rows: setup block first, then per-pair TSP/RMP/DWEL.
+  const rows = [];
+  const endDesc = {
+    dwEll: "At program end, control holds at the last setpoint",
+    OFF: "At program end, heater output turns OFF (natural cooling)",
+    rES: "At program end, reset and revert to SP1",
+    SP2: "At program end, control at setpoint 2",
+  }[endType];
+  rows.push({ prompt: "TM.CFG", value: "PROG", desc: "Configure the timer as a programmer", setup: true });
+  rows.push({ prompt: "TM.RES", value: unit === "h" ? "hour" : "min", desc: `Program resolution — ramp rates are in °C per ${unit === "h" ? "hour" : "minute"} (dwells entered as h:mm)`, setup: true });
+  rows.push({ prompt: "THRES", value: String(thres), desc: `Holdback band: dwell waits until PV is within ±${thres} °C of setpoint`, setup: true });
+  rows.push({ prompt: "END.T", value: endType, desc: endDesc, setup: true });
+
+  segs.forEach((s, i) => {
+    const n = i + 1;
+    rows.push({ prompt: `TSP.${n}`, value: `${s.tsp}`, desc: s.descTsp });
+    rows.push({ prompt: `RMP.${n}`, value: s.rmpLabel, desc: s.descRmp });
+    rows.push({ prompt: `DWEL.${n}`, value: fmtHMM(s.dwellMin), desc: s.descDwell });
+  });
+
+  return { rows, totalMinutes, target, holdMin };
+}
+
+const state = { totalMinutes: 0, target: 0, holdMin: 0, tickHandle: null, endsAt: null };
+
+function render(program) {
+  const tbody = document.querySelector("#resultTable tbody");
+  tbody.innerHTML = "";
+  program.rows.forEach(r => {
+    const tr = document.createElement("tr");
+    if (r.setup) tr.className = "setup-row";
+    tr.innerHTML = `
+      <td class="label-cell">${r.prompt}</td>
+      <td>${r.value}</td>
+      <td class="label-cell">${r.desc}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const total = Math.round(program.totalMinutes);
+  const hours = (total / 60).toFixed(2);
+  document.getElementById("notes").innerHTML =
+    `Total programmed time: <strong>${total} min (${hours} h)</strong>. ` +
+    `Enter Level 2: hold <strong>PAGE</strong> → select <strong>LEv 2</strong> → code <strong>25</strong>. ` +
+    `Start the run: press &amp; quickly release <strong>PAGE + SCROLL</strong>. ` +
+    `Clear a DEVIATION HIGH alarm with <strong>PAGE + SCROLL</strong>.`;
+  document.getElementById("resultPanel").style.display = "block";
+  state.totalMinutes = total;
+  state.target = program.target;
+  state.holdMin = program.holdMin;
+  resetRunUI();
+}
+
+document.getElementById("calcBtn").addEventListener("click", () => {
+  const err = document.getElementById("err");
+  err.textContent = "";
+
+  const target = Number(document.getElementById("targetTemp").value);
+  const rate = Number(document.getElementById("rampRate").value);
+  const unit = document.getElementById("rampUnit").value;
+  const holdRaw = Number(document.getElementById("holdTime").value);
+  const holdUnit = document.getElementById("holdTimeUnit").value;
+  const purgeRaw = Number(document.getElementById("purgeTime").value || 0);
+  const purgeUnit = document.getElementById("purgeTimeUnit").value;
+  const endType = document.getElementById("endType").value;
+  const thres = Math.max(0, Math.round(Number(document.getElementById("thres").value || 0)));
+
+  if (!Number.isFinite(target) || target <= START_TEMP) {
+    err.textContent = `Enter a target temperature greater than ${START_TEMP} °C.`;
+    return;
+  }
+  if (target > MAX_TEMP) {
+    err.textContent = `Target temperature must not exceed ${MAX_TEMP} °C.`;
+    return;
+  }
+  if (!Number.isFinite(rate) || rate <= 0) {
+    err.textContent = "Enter a ramp rate greater than 0.";
+    return;
+  }
+  if (rateToCPerMin(rate, unit) > MAX_RATE_CMIN) {
+    err.textContent = `Ramp rate must not exceed ${MAX_RATE_CMIN} °C/min (= ${MAX_RATE_CMIN * 60} °C/hour).`;
+    return;
+  }
+  if (!Number.isFinite(holdRaw) || holdRaw < 0) {
+    err.textContent = "Enter a non-negative hold time.";
+    return;
+  }
+
+  // Validate extra steps.
+  for (let i = 0; i < extra.length; i++) {
+    const s = extra[i];
+    if (!Number.isFinite(Number(s.temp)) || s.temp <= 0 || s.temp > MAX_TEMP) {
+      err.textContent = `Step ${i + 3}: enter a target between 1 and ${MAX_TEMP} °C.`;
+      return;
+    }
+    if (!Number.isFinite(Number(s.rate)) || s.rate <= 0) {
+      err.textContent = `Step ${i + 3}: enter a ramp rate greater than 0.`;
+      return;
+    }
+    if (rateToCPerMin(s.rate, unit) > MAX_RATE_CMIN) {
+      err.textContent = `Step ${i + 3}: ramp rate must not exceed ${MAX_RATE_CMIN} °C/min.`;
+      return;
+    }
+    if (!Number.isFinite(Number(s.hold)) || s.hold < 0) {
+      err.textContent = `Step ${i + 3}: enter a non-negative dwell.`;
+      return;
+    }
+  }
+
+  const program = buildProgram({
+    target,
+    rate,
+    unit,
+    holdMin: Math.round(toMinutes(holdRaw, holdUnit)),
+    purgeMin: Math.round(toMinutes(purgeRaw, purgeUnit)),
+    endType,
+    thres,
+  });
+  render(program);
+});
+
+function fmtDuration(ms) {
+  if (ms < 0) ms = 0;
+  const total = Math.floor(ms / 1000);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return [h, m, s].map(n => String(n).padStart(2, "0")).join(":");
+}
+
+function resetRunUI() {
+  clearInterval(state.tickHandle);
+  state.tickHandle = null;
+  state.endsAt = null;
+  document.getElementById("timer").style.display = "none";
+  document.getElementById("startBtn").disabled = false;
+  document.getElementById("startBtn").textContent = "Start run";
+  document.getElementById("stopBtn").style.display = "none";
+  document.getElementById("runStatus").textContent = "";
+  document.getElementById("runStatus").classList.remove("success");
+  document.getElementById("runErr").textContent = "";
+}
+
+function tick() {
+  const now = Date.now();
+  const remainingMs = state.endsAt - now;
+  const elapsedMs = state.totalMinutes * 60 * 1000 - remainingMs;
+  document.getElementById("elapsed").textContent = fmtDuration(elapsedMs);
+  document.getElementById("remaining").textContent = fmtDuration(remainingMs);
+  if (remainingMs <= 0) {
+    clearInterval(state.tickHandle);
+    state.tickHandle = null;
+    const status = document.getElementById("runStatus");
+    status.textContent = "Programmed cycle complete. Notification email dispatched.";
+    status.classList.add("success");
+    document.getElementById("stopBtn").style.display = "none";
+  }
+}
+
+document.getElementById("startBtn").addEventListener("click", async () => {
+  const runErr = document.getElementById("runErr");
+  const status = document.getElementById("runStatus");
+  runErr.textContent = "";
+  status.textContent = "";
+  status.classList.remove("success");
+
+  const email = document.getElementById("email").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    runErr.textContent = "Enter a valid email address.";
+    return;
+  }
+  if (!state.totalMinutes) {
+    runErr.textContent = "Calculate a program first.";
+    return;
+  }
+
+  const startBtn = document.getElementById("startBtn");
+  startBtn.disabled = true;
+  startBtn.textContent = "Scheduling...";
+
+  try {
+    const resp = await fetch("/api/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email,
+        totalMinutes: state.totalMinutes,
+        maxTemp: state.target,
+        holdTime: state.holdMin,
+      }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Failed to schedule");
+
+    state.endsAt = Date.now() + state.totalMinutes * 60 * 1000;
+    document.getElementById("eta").textContent = new Date(state.endsAt).toLocaleString();
+    document.getElementById("timer").style.display = "block";
+    document.getElementById("stopBtn").style.display = "inline-block";
+    startBtn.textContent = "Running...";
+    status.textContent = `Run started. Notification will be emailed to ${email}.`;
+    tick();
+    state.tickHandle = setInterval(tick, 1000);
+  } catch (err) {
+    runErr.textContent = err.message || "Failed to schedule notification.";
+    startBtn.disabled = false;
+    startBtn.textContent = "Start run";
+  }
+});
+
+document.getElementById("testBtn").addEventListener("click", async () => {
+  const runErr = document.getElementById("runErr");
+  const status = document.getElementById("runStatus");
+  runErr.textContent = "";
+  status.textContent = "";
+  status.classList.remove("success");
+
+  const email = document.getElementById("email").value.trim();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    runErr.textContent = "Enter a valid email address to test.";
+    return;
+  }
+
+  const testBtn = document.getElementById("testBtn");
+  testBtn.disabled = true;
+  testBtn.textContent = "Sending...";
+
+  try {
+    const resp = await fetch("/api/schedule", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, test: true }),
+    });
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error || "Failed to send test");
+    status.textContent = `Test email queued for ${email}. Delivery usually within a few seconds.`;
+    status.classList.add("success");
+  } catch (err) {
+    runErr.textContent = err.message || "Failed to send test email.";
+  } finally {
+    testBtn.disabled = false;
+    testBtn.textContent = "Send test email";
+  }
+});
+
+document.getElementById("stopBtn").addEventListener("click", () => {
+  if (!confirm("Cancel the local timer? Note: the scheduled email cannot be cancelled and will still be sent.")) return;
+  resetRunUI();
+  document.getElementById("runStatus").textContent = "Local timer cancelled. (Scheduled email will still send.)";
+});
+</script>
+</body>
+</html>
